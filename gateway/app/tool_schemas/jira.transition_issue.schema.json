@@ -1,0 +1,14 @@
+{
+  "type": "object",
+  "properties": {
+    "issue_key": {
+      "type": "string"
+    },
+    "transition_name": {
+      "type": "string"
+    }
+  },
+  "required": ["issue_key", "transition_name"],
+  "additionalProperties": false
+}
+

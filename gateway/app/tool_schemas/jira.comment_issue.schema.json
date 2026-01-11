@@ -1,0 +1,14 @@
+{
+  "type": "object",
+  "properties": {
+    "issue_key": {
+      "type": "string"
+    },
+    "body": {
+      "type": "string"
+    }
+  },
+  "required": ["issue_key", "body"],
+  "additionalProperties": false
+}
+
