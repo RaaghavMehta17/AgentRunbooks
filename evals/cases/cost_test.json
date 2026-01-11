@@ -1,0 +1,10 @@
+{
+  "name": "cost_test",
+  "mode": "execute",
+  "description": "Test cost budget enforcement and tracking",
+  "expected": {
+    "max_cost_usd": 0.10,
+    "max_tokens": 1000
+  }
+}
+

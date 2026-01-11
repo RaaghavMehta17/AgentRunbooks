@@ -1,0 +1,10 @@
+{
+  "name": "latency_test",
+  "mode": "execute",
+  "description": "Test execution latency and performance",
+  "expected": {
+    "max_p95_ms": 2000,
+    "max_total_ms": 5000
+  }
+}
+

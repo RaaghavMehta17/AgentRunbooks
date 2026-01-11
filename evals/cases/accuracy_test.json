@@ -1,0 +1,25 @@
+{
+  "name": "accuracy_test",
+  "mode": "shadow",
+  "description": "Test agent accuracy in generating correct tool calls and arguments",
+  "expected": {
+    "steps": [
+      {
+        "name": "ack-incident",
+        "tool": "pagerduty.ack",
+        "args": {
+          "incident_id": "INC123"
+        }
+      },
+      {
+        "name": "create-ticket",
+        "tool": "jira.create_issue",
+        "args": {
+          "project": "SRE",
+          "summary": "Incident Response"
+        }
+      }
+    ]
+  }
+}
+

@@ -1,0 +1,7 @@
+{
+  "name": "smoke_rollback",
+  "mode": "shadow",
+  "expected": { "steps": ["ack-page", "drain-node", "rollback"] }
+}
+
+
