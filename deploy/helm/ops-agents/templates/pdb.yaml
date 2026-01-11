@@ -1,0 +1,27 @@
+{{- if .Values.podDisruptionBudget.enabled }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "ops-agents.fullname" . }}-gateway
+  labels:
+    {{- include "ops-agents.gateway.labels" . | nindent 4 }}
+spec:
+  minAvailable: {{ .Values.podDisruptionBudget.gateway.minAvailable }}
+  selector:
+    matchLabels:
+      {{- include "ops-agents.gateway.selectorLabels" . | nindent 6 }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "ops-agents.fullname" . }}-orchestrator
+  labels:
+    {{- include "ops-agents.orchestrator.labels" . | nindent 4 }}
+spec:
+  minAvailable: {{ .Values.podDisruptionBudget.orchestrator.minAvailable }}
+  selector:
+    matchLabels:
+      {{- include "ops-agents.orchestrator.selectorLabels" . | nindent 6 }}
+{{- end }}
+

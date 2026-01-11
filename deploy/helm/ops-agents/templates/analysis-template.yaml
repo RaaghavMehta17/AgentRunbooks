@@ -1,0 +1,71 @@
+{{- if .Values.rollouts.enabled }}
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: ops-agents-analysis
+  labels:
+    {{- include "ops-agents.labels" . | nindent 4 }}
+spec:
+  metrics:
+    {{- if .Values.rollouts.analysis.prometheus }}
+    - name: prometheus-success-rate
+      interval: 30s
+      count: 3
+      successCondition: {{ .Values.rollouts.analysis.prometheus.successCondition | quote }}
+      failureCondition: {{ .Values.rollouts.analysis.prometheus.failureCondition | quote }}
+      provider:
+        prometheus:
+          address: {{ .Values.rollouts.analysis.prometheus.address }}
+          query: |
+            sum(rate(http_server_requests_seconds_count{
+              job="{{ include "ops-agents.fullname" . }}-gateway",
+              namespace="{{ .Release.Namespace }}"
+            }[1m]))
+    {{- end }}
+    {{- if .Values.rollouts.analysis.webhook }}
+    - name: webhook-check
+      interval: 30s
+      count: 3
+      successCondition: result.eligible == true
+      failureCondition: result.eligible == false
+      provider:
+        web:
+          url: {{ .Values.rollouts.analysis.webhook.url }}
+          timeoutSeconds: {{ .Values.rollouts.analysis.webhook.timeoutSeconds }}
+          method: GET
+          headers:
+            - key: Content-Type
+              value: application/json
+    {{- end }}
+    {{- if and .Values.rollouts.analysis.slo.enabled .Values.rollouts.analysis.prometheus }}
+    - name: slo-burn-rate-check
+      interval: 30s
+      count: 3
+      successCondition: result[0] <= {{ .Values.rollouts.analysis.slo.burnRateThreshold | default 6 }}
+      failureCondition: result[0] > {{ .Values.rollouts.analysis.slo.burnRateThreshold | default 6 }}
+      provider:
+        prometheus:
+          address: {{ .Values.rollouts.analysis.prometheus.address }}
+          query: |
+            (
+              sum(rate(http_requests_total{status=~"5..",job="{{ include "ops-agents.fullname" . }}-gateway",namespace="{{ .Release.Namespace }}"}[2h])) /
+              sum(rate(http_requests_total{job="{{ include "ops-agents.fullname" . }}-gateway",namespace="{{ .Release.Namespace }}"}[2h]))
+            ) / (1 - 0.995)
+    {{- end }}
+    {{- if .Values.rollouts.analysis.slo.enabled }}
+    - name: slo-webhook-check
+      interval: 30s
+      count: 3
+      successCondition: result.ok == true
+      failureCondition: result.ok == false
+      provider:
+        web:
+          url: http://{{ include "ops-agents.fullname" . }}-gateway.{{ .Release.Namespace }}.svc.cluster.local:8000/slo/status?check=canary
+          timeoutSeconds: 5
+          method: GET
+          headers:
+            - key: Content-Type
+              value: application/json
+    {{- end }}
+{{- end }}
+

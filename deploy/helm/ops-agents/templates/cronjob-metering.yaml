@@ -1,0 +1,74 @@
+{{- if .Values.billing.enabled }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "ops-agents.fullname" . }}-metering
+  labels:
+    {{- include "ops-agents.labels" . | nindent 4 }}
+    app.kubernetes.io/component: metering
+spec:
+  schedule: "0 1 * * *"  # Daily at 1 AM (after backup)
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            {{- include "ops-agents.labels" . | nindent 12 }}
+            app.kubernetes.io/component: metering
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: metering
+              image: "{{ .Values.image.gateway.repository }}:{{ .Values.image.gateway.tag | default .Chart.AppVersion }}"
+              imagePullPolicy: {{ .Values.image.gateway.pullPolicy }}
+              command:
+                - python
+                - -c
+                - |
+                  import os
+                  import sys
+                  from sqlalchemy import create_engine
+                  from sqlalchemy.orm import sessionmaker
+                  
+                  # Add gateway app to path
+                  sys.path.insert(0, '/app')
+                  
+                  from gateway.app.billing.metering import aggregate_daily_usage
+                  from gateway.app.db import Base
+                  
+                  DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/ops_agents")
+                  engine = create_engine(DATABASE_URL)
+                  SessionLocal = sessionmaker(bind=engine)
+                  
+                  db = SessionLocal()
+                  try:
+                      aggregate_daily_usage(db)
+                      print("Metering aggregation completed successfully")
+                  except Exception as e:
+                      print(f"Error aggregating usage: {e}")
+                      sys.exit(1)
+                  finally:
+                      db.close()
+              env:
+                - name: DATABASE_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ include "ops-agents.fullname" . }}-secrets
+                      key: DATABASE_URL
+                      optional: true
+                {{- range $key, $value := .Values.env.common }}
+                - name: {{ $key }}
+                  value: {{ $value | quote }}
+                {{- end }}
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 256Mi
+                limits:
+                  cpu: 500m
+                  memory: 512Mi
+{{- end }}
+

@@ -1,0 +1,78 @@
+{{- if and .Values.prometheus.enabled .Values.alerts.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "ops-agents.fullname" . }}-alerts
+  namespace: {{ .Values.prometheus.namespace | default .Release.Namespace }}
+  labels:
+    {{- include "ops-agents.labels" . | nindent 4 }}
+    app.kubernetes.io/component: alerts
+spec:
+  groups:
+    - name: ops-agents.rules
+      interval: 30s
+      rules:
+        - alert: HighP95Latency
+          expr: |
+            histogram_quantile(0.95,
+              sum(rate(http_request_duration_seconds_bucket{
+                job="{{ include "ops-agents.fullname" . }}-gateway",
+                namespace="{{ .Release.Namespace }}"
+              }[5m])) by (le)
+            ) * 1000 > {{ .Values.alerts.p95LatencyMs }}
+          for: 5m
+          labels:
+            severity: warning
+            component: gateway
+          annotations:
+            summary: "High p95 latency detected"
+            description: "Gateway p95 latency is {{ `{{ $value }}` }}ms (threshold: {{ .Values.alerts.p95LatencyMs }}ms)"
+
+        - alert: HighErrorRate
+          expr: |
+            sum(rate(http_requests_total{
+              job="{{ include "ops-agents.fullname" . }}-gateway",
+              namespace="{{ .Release.Namespace }}",
+              status=~"5.."
+            }[5m])) /
+            sum(rate(http_requests_total{
+              job="{{ include "ops-agents.fullname" . }}-gateway",
+              namespace="{{ .Release.Namespace }}"
+            }[5m])) * 100 > {{ .Values.alerts.errorRatePct }}
+          for: 5m
+          labels:
+            severity: critical
+            component: gateway
+          annotations:
+            summary: "High error rate detected"
+            description: "Gateway error rate is {{ `{{ $value }}` }}% (threshold: {{ .Values.alerts.errorRatePct }}%)"
+
+        - alert: GatewayDown
+          expr: |
+            up{
+              job="{{ include "ops-agents.fullname" . }}-gateway",
+              namespace="{{ .Release.Namespace }}"
+            } == 0
+          for: 1m
+          labels:
+            severity: critical
+            component: gateway
+          annotations:
+            summary: "Gateway is down"
+            description: "Gateway service is not responding to metrics scraping"
+
+        - alert: OrchestratorDown
+          expr: |
+            up{
+              job="{{ include "ops-agents.fullname" . }}-orchestrator",
+              namespace="{{ .Release.Namespace }}"
+            } == 0
+          for: 1m
+          labels:
+            severity: warning
+            component: orchestrator
+          annotations:
+            summary: "Orchestrator is down"
+            description: "Orchestrator service is not responding to metrics scraping"
+{{- end }}
+

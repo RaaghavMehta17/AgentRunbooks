@@ -1,0 +1,116 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "ops-agents.fullname" . }}-orchestrator
+  labels:
+    {{- include "ops-agents.orchestrator.labels" . | nindent 4 }}
+spec:
+  {{- if .Values.autoscaling.orchestrator.enabled }}
+  replicas: {{ .Values.autoscaling.orchestrator.minReplicas }}
+  {{- else }}
+  replicas: {{ .Values.replicaCount.orchestrator }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "ops-agents.orchestrator.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "ops-agents.orchestrator.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "ops-agents.orchestrator.serviceAccountName" . }}
+      {{- if .Values.priorityClasses.enabled }}
+      priorityClassName: ops-agents-high
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- if .Values.topology.spread.enabled }}
+      topologySpreadConstraints:
+        - maxSkew: {{ .Values.topology.spread.maxSkew }}
+          topologyKey: {{ .Values.topology.spread.topologyKey }}
+          whenUnsatisfiable: {{ .Values.topology.spread.whenUnsatisfiable }}
+          labelSelector:
+            matchLabels:
+              {{- include "ops-agents.orchestrator.selectorLabels" . | nindent 14 }}
+      {{- end }}
+      containers:
+        - name: orchestrator
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          image: "{{ .Values.image.orchestrator.repository }}:{{ .Values.image.orchestrator.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.orchestrator.pullPolicy }}
+          ports:
+            - name: metrics
+              containerPort: 9100
+              protocol: TCP
+          env:
+            {{- range $key, $value := .Values.env.common }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+            {{- range $key, $value := .Values.env.orchestrator }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "ops-agents.fullname" . }}-secrets
+                  key: DATABASE_URL
+                  optional: true
+            {{- if .Values.temporal.enabled }}
+            - name: TEMPORAL_HOST
+              value: "{{ include "ops-agents.fullname" . }}-temporal:7233"
+            {{- end }}
+            {{- range $key, $value := .Values.secrets }}
+            {{- if ne $value "" }}
+            - name: {{ $key }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "ops-agents.fullname" . }}-secrets
+                  key: {{ $key }}
+            {{- end }}
+            {{- end }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+          livenessProbe:
+            tcpSocket:
+              port: metrics
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            tcpSocket:
+              port: metrics
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.resources.orchestrator | nindent 12 }}
+      volumes:
+        - name: tmp
+          emptyDir: {}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+

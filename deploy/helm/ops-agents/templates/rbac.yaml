@@ -1,0 +1,97 @@
+{{- if .Values.rbac.enabled }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "ops-agents.gateway.serviceAccountName" . }}
+  labels:
+    {{- include "ops-agents.gateway.labels" . | nindent 4 }}
+  {{- with .Values.serviceAccount.gateway.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+automountServiceAccountToken: true
+{{- end }}
+---
+{{- if .Values.rbac.enabled }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "ops-agents.orchestrator.serviceAccountName" . }}
+  labels:
+    {{- include "ops-agents.orchestrator.labels" . | nindent 4 }}
+  {{- with .Values.serviceAccount.orchestrator.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+automountServiceAccountToken: true
+{{- end }}
+---
+{{- if and .Values.rbac.enabled .Values.otelCollector.enabled }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "ops-agents.otelCollector.serviceAccountName" . }}
+  labels:
+    {{- include "ops-agents.otelCollector.labels" . | nindent 4 }}
+  {{- with .Values.serviceAccount.otelCollector.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+automountServiceAccountToken: true
+{{- end }}
+---
+{{- if .Values.rbac.enabled }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "ops-agents.fullname" . }}-gateway
+  labels:
+    {{- include "ops-agents.gateway.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps", "secrets"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "ops-agents.fullname" . }}-gateway
+  labels:
+    {{- include "ops-agents.gateway.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "ops-agents.fullname" . }}-gateway
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "ops-agents.gateway.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "ops-agents.fullname" . }}-orchestrator
+  labels:
+    {{- include "ops-agents.orchestrator.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps", "secrets"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "ops-agents.fullname" . }}-orchestrator
+  labels:
+    {{- include "ops-agents.orchestrator.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "ops-agents.fullname" . }}-orchestrator
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "ops-agents.orchestrator.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}
+

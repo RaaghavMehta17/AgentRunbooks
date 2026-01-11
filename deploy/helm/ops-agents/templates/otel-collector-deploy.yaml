@@ -1,0 +1,91 @@
+{{- if .Values.otelCollector.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "ops-agents.fullname" . }}-otel-collector
+  labels:
+    {{- include "ops-agents.otelCollector.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "ops-agents.otelCollector.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "ops-agents.otelCollector.selectorLabels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "ops-agents.otelCollector.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: otel-collector
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          image: "{{ .Values.image.otelCollector.repository }}:{{ .Values.image.otelCollector.tag }}"
+          imagePullPolicy: {{ .Values.image.otelCollector.pullPolicy }}
+          command:
+            - "/otelcol-contrib"
+            - "--config=/etc/otel-collector-config.yaml"
+          ports:
+            - name: otlp-grpc
+              containerPort: 4317
+              protocol: TCP
+            - name: otlp-http
+              containerPort: 4318
+              protocol: TCP
+            - name: metrics
+              containerPort: 13133
+              protocol: TCP
+          volumeMounts:
+            - name: otel-collector-config
+              mountPath: /etc/otel-collector-config.yaml
+              subPath: otel-collector-config.yaml
+            - name: tmp
+              mountPath: /tmp
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 13133
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 13133
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.resources.otelCollector | nindent 12 }}
+      volumes:
+        - name: otel-collector-config
+          configMap:
+            name: {{ include "ops-agents.fullname" . }}-otel-collector
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "ops-agents.fullname" . }}-otel-collector
+  labels:
+    {{- include "ops-agents.otelCollector.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - name: otlp-grpc
+      port: 4317
+      targetPort: otlp-grpc
+      protocol: TCP
+    - name: otlp-http
+      port: 4318
+      targetPort: otlp-http
+      protocol: TCP
+  selector:
+    {{- include "ops-agents.otelCollector.selectorLabels" . | nindent 4 }}
+{{- end }}
+

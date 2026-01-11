@@ -1,0 +1,30 @@
+# Kind-specific overrides
+# This disables TLS and uses NodePort for ingress
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations: {}
+  hosts:
+    - host: ops-agents.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+replicaCount:
+  gateway: 1
+  orchestrator: 1
+
+otelCollector:
+  enabled: true
+
+temporal:
+  enabled: false
+
+prometheus:
+  enabled: false
+
+grafana:
+  enabled: false
+

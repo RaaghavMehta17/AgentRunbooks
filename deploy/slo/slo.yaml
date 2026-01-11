@@ -1,0 +1,21 @@
+targets:
+  gateway.success_rate:
+    objective: 0.995
+    window: 30d
+    sli: "sum(rate(http_requests_total{status=~\"2..\",job=\"ops-agents-gateway\"}[5m])) / sum(rate(http_requests_total{job=\"ops-agents-gateway\"}[5m]))"
+  
+  gateway.latency_p95:
+    objective_ms: 1000
+    window: 30d
+    sli: "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{job=\"ops-agents-gateway\"}[5m])) by (le)) * 1000"
+  
+  tools.invoke.success:
+    objective: 0.995
+    window: 30d
+    sli: "sum(rate(http_requests_total{path=\"/tools/invoke\",status=~\"2..\",job=\"ops-agents-gateway\"}[5m])) / sum(rate(http_requests_total{path=\"/tools/invoke\",job=\"ops-agents-gateway\"}[5m]))"
+  
+  steps.failure_rate:
+    objective: 0.005
+    window: 30d
+    sli: "sum(rate(step_attempts_total{status=\"failed\"}[5m])) / sum(rate(step_attempts_total[5m]))"
+

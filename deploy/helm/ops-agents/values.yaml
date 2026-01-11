@@ -1,0 +1,287 @@
+# Default values for ops-agents
+# This is a YAML-formatted file.
+
+replicaCount:
+  gateway: 2
+  orchestrator: 1
+
+image:
+  gateway:
+    repository: ghcr.io/you/ops-agents-gateway
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  orchestrator:
+    repository: ghcr.io/you/ops-agents-orchestrator
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  otelCollector:
+    repository: otel/opentelemetry-collector-contrib
+    tag: "0.107.0"
+    pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  gateway:
+    create: true
+    annotations: {}
+    name: ""
+  orchestrator:
+    create: true
+    annotations: {}
+    name: ""
+  otelCollector:
+    create: true
+    annotations: {}
+    name: ""
+
+podAnnotations: {}
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65534
+  fsGroup: 65534
+  seccompProfile:
+    type: RuntimeDefault
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+podDisruptionBudget:
+  enabled: true
+  gateway:
+    minAvailable: 1
+  orchestrator:
+    minAvailable: 1
+
+resources:
+  gateway:
+    requests:
+      cpu: 200m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 512Mi
+  orchestrator:
+    requests:
+      cpu: 200m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 512Mi
+  otelCollector:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+# Environment variables
+env:
+  common:
+    APP_ENV: prod
+    OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+  gateway:
+    CORS_ORIGINS: http://localhost:5173
+  orchestrator:
+    USE_REAL_GITHUB: "false"
+
+# Secrets (mounted from Kubernetes Secret)
+# In production, use External Secrets Operator or Sealed Secrets
+secrets:
+  GITHUB_TOKEN: ""
+  OPENAI_API_KEY: ""
+  ANTHROPIC_API_KEY: ""
+  AUDIT_HMAC_SECRET: ""
+  SESSION_SECRET: ""
+  OIDC_CLIENT_SECRET: ""
+  SCIM_BEARER_TOKEN: ""
+  JWT_SECRET_KEY: ""
+
+# Service configurations
+service:
+  gateway:
+    type: ClusterIP
+    port: 8000
+  orchestrator:
+    type: ClusterIP
+    port: 9100
+
+# Ingress configuration
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt
+  hosts:
+    - host: ops-agents.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: ops-agents-tls
+      hosts:
+        - ops-agents.local
+
+# OpenTelemetry Collector configuration
+otelCollector:
+  enabled: true
+  config: |
+    receivers:
+      otlp:
+        protocols:
+          http:
+            endpoint: 0.0.0.0:4318
+          grpc:
+            endpoint: 0.0.0.0:4317
+    processors:
+      batch: {}
+    exporters:
+      logging:
+        loglevel: warn
+      otlp:
+        endpoint: tempo:4317
+        tls:
+          insecure: true
+    service:
+      pipelines:
+        traces:
+          receivers: [otlp]
+          processors: [batch]
+          exporters: [logging, otlp]
+        metrics:
+          receivers: [otlp]
+          processors: [batch]
+          exporters: [logging, otlp]
+
+# Autoscaling
+autoscaling:
+  gateway:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 6
+    targetCPUUtilizationPercentage: 60
+    targetMemoryUtilizationPercentage: 70
+  orchestrator:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 4
+    targetCPUUtilizationPercentage: 60
+    targetMemoryUtilizationPercentage: 70
+
+# Topology spread constraints
+topology:
+  spread:
+    enabled: false
+    maxSkew: 1
+    topologyKey: kubernetes.io/hostname
+    whenUnsatisfiable: ScheduleAnyway
+
+# Priority classes
+priorityClasses:
+  enabled: false
+  classes:
+    - name: ops-agents-high
+      value: 1000
+      globalDefault: false
+      description: "Critical path services"
+    - name: ops-agents-normal
+      value: 500
+      globalDefault: false
+      description: "Default for services"
+
+# Optional components
+temporal:
+  enabled: false
+
+prometheus:
+  enabled: false
+  serviceMonitor: false
+  namespace: monitoring
+
+grafana:
+  enabled: false
+  dashboardsNamespace: monitoring
+
+# Alerts
+alerts:
+  enabled: false
+  p95LatencyMs: 1000
+  errorRatePct: 2
+
+# Argo Rollouts
+rollouts:
+  enabled: false
+  strategy: canary  # canary | blueGreen
+  canary:
+    steps:
+      - setWeight: 10
+      - pause:
+          duration: 60
+      - setWeight: 30
+      - pause:
+          duration: 120
+      - setWeight: 50
+      - analysis:
+          templates:
+            - ops-agents-analysis
+          args: []
+  blueGreen:
+    autoPromotionEnabled: false
+    previewReplicaCount: 1
+  analysis:
+    prometheus:
+      address: http://prometheus.monitoring:9090
+      successCondition: "avg_over_time(http_server_requests_seconds_count{status=~\"2..\",job=\"ops-agents-gateway\"}[2m]) > 10"
+      failureCondition: "avg_over_time(http_server_requests_seconds_count{status=~\"5..\",job=\"ops-agents-gateway\"}[2m]) > 1"
+    webhook:
+      url: http://ops-agents-gateway.ops-agents.svc.cluster.local:8000/canary/check
+      timeoutSeconds: 5
+    slo:
+      enabled: true
+      burnRateThreshold: 6
+
+# Backups
+backup:
+  enabled: false
+  schedule: "0 2 * * *"  # Daily at 2 AM
+  retentionDays: 14
+  destination: pvc  # pvc or s3
+  pvc:
+    size: 20Gi
+  s3:
+    enabled: false
+    bucket: ops-agents-backups
+    endpoint: http://minio.minio:9000
+    accessKey: ""
+    secretKey: ""
+
+# Billing
+billing:
+  enabled: false
+
+# NetworkPolicy
+networkPolicy:
+  enabled: true
+  ingress:
+    fromNamespaces:
+      - ingress-nginx
+
+# RBAC
+rbac:
+  enabled: true
+

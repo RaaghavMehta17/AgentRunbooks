@@ -1,0 +1,14 @@
+apiVersion: v2
+name: ops-agents
+description: OpsGenie-for-Agents - AI-powered runbook automation platform
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - runbooks
+  - automation
+  - ai
+  - temporal
+maintainers:
+  - name: OpsGenie Team
+

@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "ops-agents.fullname" . }}-orchestrator
+  labels:
+    {{- include "ops-agents.orchestrator.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.orchestrator.type }}
+  ports:
+    - port: {{ .Values.service.orchestrator.port }}
+      targetPort: metrics
+      protocol: TCP
+      name: metrics
+  selector:
+    {{- include "ops-agents.orchestrator.selectorLabels" . | nindent 4 }}
+

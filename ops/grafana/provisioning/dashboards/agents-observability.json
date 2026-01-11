@@ -1,0 +1,50 @@
+{
+  "title": "OpsGenie-for-Agents",
+  "timezone": "browser",
+  "panels": [
+    {
+      "type": "graph",
+      "title": "Requests by route",
+      "targets": [
+        {
+          "expr": "sum(rate(http_requests_total[5m])) by (path)"
+        }
+      ],
+      "datasource": "Prometheus"
+    },
+    {
+      "type": "graph",
+      "title": "Adapter invocations",
+      "targets": [
+        {
+          "expr": "sum(rate(adapter_invocations_total[5m])) by (adapter,tool,dry_run)"
+        }
+      ],
+      "datasource": "Prometheus"
+    },
+    {
+      "type": "graph",
+      "title": "Adapter latency p95",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(adapter_latency_seconds_bucket[5m])) by (le,adapter,tool))"
+        }
+      ],
+      "datasource": "Prometheus"
+    },
+    {
+      "type": "graph",
+      "title": "Policy blocks",
+      "targets": [
+        {
+          "expr": "sum(rate(policy_blocks_total[5m])) by (reason)"
+        }
+      ],
+      "datasource": "Prometheus"
+    }
+  ],
+  "schemaVersion": 36,
+  "version": 1
+}
+
+

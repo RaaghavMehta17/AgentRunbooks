@@ -1,0 +1,103 @@
+{{- if and .Values.prometheus.enabled .Values.alerts.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "ops-agents.fullname" . }}-slo-alerts
+  namespace: {{ .Values.prometheus.namespace | default .Release.Namespace }}
+  labels:
+    {{- include "ops-agents.labels" . | nindent 4 }}
+    app.kubernetes.io/component: slo-alerts
+spec:
+  groups:
+    - name: ops-agents.slo
+      interval: 30s
+      rules:
+        # Burn-rate alert for success rate (2h window)
+        - alert: HighErrorBudgetBurnRate2h
+          expr: |
+            (
+              sum(rate(http_requests_total{status=~"5..",job="{{ include "ops-agents.fullname" . }}-gateway",namespace="{{ .Release.Namespace }}"}[2h])) /
+              sum(rate(http_requests_total{job="{{ include "ops-agents.fullname" . }}-gateway",namespace="{{ .Release.Namespace }}"}[2h]))
+            ) > (1 - 0.995) * 14.4
+          for: 5m
+          labels:
+            severity: page
+            slo: gateway.success_rate
+            window: 2h
+            burn_rate_multiplier: "14.4"
+          annotations:
+            summary: "High error budget burn rate (2h window)"
+            description: "Error budget burn rate is {{ `{{ $value }}` }}× (threshold: 14.4×) for gateway success rate SLO"
+            runbook_url: "https://ops-agents.local/slo/status"
+
+        # Burn-rate alert for success rate (6h window)
+        - alert: HighErrorBudgetBurnRate6h
+          expr: |
+            (
+              sum(rate(http_requests_total{status=~"5..",job="{{ include "ops-agents.fullname" . }}-gateway",namespace="{{ .Release.Namespace }}"}[6h])) /
+              sum(rate(http_requests_total{job="{{ include "ops-agents.fullname" . }}-gateway",namespace="{{ .Release.Namespace }}"}[6h]))
+            ) > (1 - 0.995) * 6
+          for: 5m
+          labels:
+            severity: page
+            slo: gateway.success_rate
+            window: 6h
+            burn_rate_multiplier: "6"
+          annotations:
+            summary: "High error budget burn rate (6h window)"
+            description: "Error budget burn rate is {{ `{{ $value }}` }}× (threshold: 6×) for gateway success rate SLO"
+            runbook_url: "https://ops-agents.local/slo/status"
+
+        # High p95 latency sustained
+        - alert: HighP95LatencySustained
+          expr: |
+            histogram_quantile(0.95,
+              sum(rate(http_request_duration_seconds_bucket{
+                job="{{ include "ops-agents.fullname" . }}-gateway",
+                namespace="{{ .Release.Namespace }}"
+              }[15m])) by (le)
+            ) * 1000 > 1000
+          for: 15m
+          labels:
+            severity: page
+            slo: gateway.latency_p95
+          annotations:
+            summary: "High p95 latency sustained"
+            description: "Gateway p95 latency is {{ `{{ $value }}` }}ms (threshold: 1000ms) for 15 minutes"
+            runbook_url: "https://ops-agents.local/slo/status"
+
+        # Tools invoke failure rate
+        - alert: HighToolsInvokeFailureRate
+          expr: |
+            (
+              sum(rate(http_requests_total{path="/tools/invoke",status=~"5..",job="{{ include "ops-agents.fullname" . }}-gateway",namespace="{{ .Release.Namespace }}"}[2h])) /
+              sum(rate(http_requests_total{path="/tools/invoke",job="{{ include "ops-agents.fullname" . }}-gateway",namespace="{{ .Release.Namespace }}"}[2h]))
+            ) > (1 - 0.995) * 14.4
+          for: 5m
+          labels:
+            severity: page
+            slo: tools.invoke.success
+            window: 2h
+          annotations:
+            summary: "High tools invoke failure rate"
+            description: "Tools invoke failure rate is {{ `{{ $value }}` }}× threshold"
+            runbook_url: "https://ops-agents.local/slo/status"
+
+        # Step failure rate
+        - alert: HighStepFailureRate
+          expr: |
+            (
+              sum(rate(step_attempts_total{status="failed",namespace="{{ .Release.Namespace }}"}[2h])) /
+              sum(rate(step_attempts_total{namespace="{{ .Release.Namespace }}"}[2h]))
+            ) > 0.005 * 14.4
+          for: 5m
+          labels:
+            severity: page
+            slo: steps.failure_rate
+            window: 2h
+          annotations:
+            summary: "High step failure rate"
+            description: "Step failure rate is {{ `{{ $value }}` }}× threshold (0.5% objective)"
+            runbook_url: "https://ops-agents.local/slo/status"
+{{- end }}
+

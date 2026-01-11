@@ -1,0 +1,19 @@
+{{- if .Values.rollouts.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "ops-agents.fullname" . }}-gateway-stable
+  labels:
+    {{- include "ops-agents.gateway.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.gateway.type }}
+  ports:
+    - port: {{ .Values.service.gateway.port }}
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "ops-agents.gateway.selectorLabels" . | nindent 4 }}
+    # Argo Rollouts manages pod selection via rollouts-pod-template-hash label
+{{- end }}
+

@@ -1,0 +1,37 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: ops-agents
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/your-org/opsgenie-for-agents.git
+    targetRevision: main
+    path: deploy/helm/ops-agents
+    helm:
+      valueFiles:
+        - values.yaml
+      # Override values per environment
+      # values: |
+      #   image:
+      #     gateway:
+      #       tag: v0.1.0
+      #     orchestrator:
+      #       tag: v0.1.0
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: ops-agents
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+  revisionHistoryLimit: 10
+
